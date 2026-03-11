@@ -1860,6 +1860,7 @@ double min_value = numeric_limits<double>::min(); // current minimal weight repr
         reducedCycle.insert(reducedCycle.end(), my_pd.cycle.begin()
              + static_cast<ptrdiff_t>(iteration + 1), my_pd.cycle.end());
         my_pd.cycle = reducedCycle;
+        --my_pd.n;
     }
 	
 // time measurement

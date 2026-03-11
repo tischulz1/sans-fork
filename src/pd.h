@@ -20,8 +20,6 @@ class pd {
    
  private:
  
-   //number of taxa
-   int n;
    //given split set is filtered for planarity
    multimap_<double, color_t> planar_splits;
    //table to store PD values for pairs of taxa (precomputation for function pd_set)
@@ -35,6 +33,8 @@ class pd {
    
  public:
 
+   //number of taxa
+   int n;
    //cyclic order of taxa along a planar split graph
    vector<int> cycle;
 
