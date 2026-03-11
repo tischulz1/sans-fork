@@ -1801,6 +1801,66 @@ double min_value = numeric_limits<double>::min(); // current minimal weight repr
 			cout <<  "(" <<util::format_time(end - begin) << ")" << endl << flush;
         }
     }
+
+    //Outlier detection//
+
+    //Number of outliers to detect
+    uint16_t nb_iterations = -1;
+    //Initiate PD object
+    pd my_pd = pd(graph::split_list,num);
+    //The minimum PD value of the current iteration
+    double minscore = my_pd.pd_value(my_pd.cycle);
+    double tmpscore;
+    uint32_t iteration;
+    
+    // //Vector to store PD values of subsets reduced by i-th taxon
+    // vector<double> reducedSetScores;
+
+    cout << "Initial PD score: " << minscore << endl;
+
+    while(nb_iterations > 0 && my_pd.cycle.size() > 2){
+        // //Allocate enough space for scores
+        // reducedSetScores.reserve(my_pd.cycle.size());
+
+        vector<int> reducedCycle;
+        //Allocate enough space for the reduced set
+        reducedCycle.reserve(my_pd.cycle.size() - 1);
+        minscore = numeric_limits<double>::max();
+
+        for(uint32_t i = 0; i < my_pd.cycle.size(); ++i){
+            //Insert range cycle[0,i)
+            reducedCycle.insert(reducedCycle.end(), my_pd.cycle.begin(), 
+                my_pd.cycle.begin() + static_cast<ptrdiff_t>(i));
+            //Insert range cycle(i,end]
+            reducedCycle.insert(reducedCycle.end(), my_pd.cycle.begin()
+             + static_cast<ptrdiff_t>(i + 1), my_pd.cycle.end());
+
+            tmpscore = my_pd.pd_value(reducedCycle);
+
+            if(tmpscore < minscore){
+                //Overwrite previous minimum
+                minscore = tmpscore;
+                iteration = i;
+            }
+
+            //Reset reduced set
+            reducedCycle.clear();
+        }
+
+        //Report outlier
+        cout << "Outlier: " << denom_names[my_pd.cycle[iteration]];
+        cout << "New PD score: " << minscore << endl;
+
+        //Remove outlier for next iteration (Is this enough???)
+
+        //Insert range cycle[0,i)
+        reducedCycle.insert(reducedCycle.end(), my_pd.cycle.begin(), 
+            my_pd.cycle.begin() + static_cast<ptrdiff_t>(iteration));
+        //Insert range cycle(i,end]
+        reducedCycle.insert(reducedCycle.end(), my_pd.cycle.begin()
+             + static_cast<ptrdiff_t>(iteration + 1), my_pd.cycle.end());
+        my_pd.cycle = reducedCycle;
+    }
 	
 // time measurement
     if (verbose) {

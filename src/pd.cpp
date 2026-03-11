@@ -58,7 +58,7 @@ multimap_<double, color_t> pd::get_planar_splits(){
 
 /**
 * Compute PD score, i.e., total weight of all splits that separate a given set of taxa.
-* Trivial splits (leaf edges) are fixed to a minimum weight.
+* --Trivial splits (leaf edges) are fixed to a minimum weight.--
 * 
 * @param taxa list of taxa to compute score of, IDs w.r.t. denom_names (not pos in cycle)
 * @return pd value of above list of taxa
@@ -72,8 +72,9 @@ double pd::pd_value(const vector<int>& taxa) {
 	color_t tax_col = 0;
 	for (int t : taxa) {
 		tax_col.set(t);
-		// Trivial splits (leaf edges) are fixed to a minimum weight and ignored below.
-		val+=0.5*min;
+
+		// // Trivial splits (leaf edges) are fixed to a minimum weight and ignored below.
+		// val+=0.5*min;
 	}
 	
 	// Iterating over all splits and check if disjoint with taxa
@@ -85,8 +86,11 @@ double pd::pd_value(const vector<int>& taxa) {
 		color_t colors = it->second;
 		it++;
 				
-		//separating split? (and non-trivial)
-		if( !color::is_singleton(colors) && ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
+		// //separating split? (and non-trivial)
+		// if( !color::is_singleton(colors) && ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
+
+		//separating split?
+		if( ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
 			val+=weight;
 		}
 	}

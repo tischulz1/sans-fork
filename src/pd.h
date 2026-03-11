@@ -24,8 +24,6 @@ class pd {
    int n;
    //given split set is filtered for planarity
    multimap_<double, color_t> planar_splits;
-   //cyclic order of taxa along a planar split graph
-   vector<int> cycle;
    //table to store PD values for pairs of taxa (precomputation for function pd_set)
    vector<vector<double>> pd_pair_vals;
    //table to store PD values for intervals of the cycle
@@ -36,6 +34,9 @@ class pd {
    
    
  public:
+
+   //cyclic order of taxa along a planar split graph
+   vector<int> cycle;
 
     /**
      * Simple getter method.
