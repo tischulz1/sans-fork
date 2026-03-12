@@ -3,6 +3,7 @@
 
 #include <utility>
 #include <iomanip> // für std::setw und std::right
+#include <algorithm>
 
 
 /**
@@ -31,10 +32,12 @@ pd::pd(const multimap_<double, color_t> split_list, const int n): n(n){
 	auto it = planar_splits.begin();
 	min=-1;
 	while (it != planar_splits.end()) {
-		if(min=-1 or it->first<min) min=it->first;
+        if(min==-1 or it->first<min) {min=it->first;}
 		it++;
 	}
-
+	
+// 	cerr<<"pd.cpp, l39: truncate leaf edges to " << 0.5*min << endl;
+	
 	//PD value for a pair of taxa on the cycle (not for an interval!)
 	//needed for the DP algo in pd::pd_set
 	vector<vector<double>> x(n,vector<double>(n));
@@ -83,7 +86,7 @@ double pd::pd_value(const vector<int>& taxa) {
 	while (it != planar_splits.end()) {
 
 		double weight = it->first;
-		color_t colors = it->second;
+        color_t colors = it->second;
 		it++;
 				
 		// //separating split? (and non-trivial)
@@ -93,6 +96,10 @@ double pd::pd_value(const vector<int>& taxa) {
 		if( ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
 			val+=weight;
 		}
+
+        // if( color::is_singleton(colors) ){
+        //     val+=std::min(0.5*min,weight);
+        // }
 	}
 
 	return val;
@@ -294,18 +301,19 @@ void pd::partition_dp(int start, vector<int> pos, double& local_min_pd, vector<i
 	local_min_seps[0]=start;
 }
 
+
+
 /**
 * Partition the set of all taxa into subsets containing one representative/seed taxon each 
 * such as to minimize the sum of PD values of all partitions.
 * 
 * @param representatives list of represenative/seed taxa (w.r.t. denom_names)
-* @param score varibale to store result: optimal total PD value (sum over all partitions)
-* @param min_score varibale to store result: minimum PD value among partitions
-* @param max_score varibale to store result: maximum PD value among partitions
-* @return vector assigning a partition ID to each taxon: result[tax_id]=part_id
+* @param pd varibale to store result: optimal total PD value (sum over all partitions)
+* @param pd_list varibale to store result: PD value per cluster
+* @return list of partition boundaries (left boundaries w.r.t. cycle)
 * 
 */
-vector<int> pd::partition(vector<int> representatives, double& score, double& min_score, double& max_score){
+vector<int> pd::partition(vector<int> representatives){
 	
 	int k=representatives.size();
 	
@@ -326,34 +334,239 @@ vector<int> pd::partition(vector<int> representatives, double& score, double& mi
 	
 	// call DP algo for any possible starting point
 	double global_min_pd=-1;
-	vector<int> global_min_seps(k);
 	// consider interval that contains the end/start of cycle: (rep_k,rep_0]
-	for (int start=(pos[k-1]+1)%n; start!=pos[0]; start=(start+1)%n) {
+	for (int start=(pos[k-1]+1)%n; start!=(pos[0]+1)%n; start=(start+1)%n) {
 		double local_min_pd=-1;
 		vector<int> local_min_seps(k);
 		partition_dp(start,pos,local_min_pd,local_min_seps);
 		if (global_min_pd==-1 or local_min_pd < global_min_pd) {
                 global_min_pd=local_min_pd;
-                global_min_seps=local_min_seps;
+                partition_boundaries=local_min_seps;
 		}
 	}
 	
-	score=global_min_pd;
+    //compose mapping tax_id->cluster_id
+    return seps2map(partition_boundaries);
 
-	//compose mapping tax_id->cluster_id
-	min_score=-1;
-	max_score=-1;
-	vector<int> mapping(n);
-	for(int cluster=0;cluster<k;cluster++){
-		int sep=global_min_seps[cluster];
-		double s=pd_value_lookup(sep,global_min_seps[(cluster+1)%k]);
-		if(min_score==-1 or s<min_score){min_score=s;}
-		if(max_score==-1 or s>max_score){max_score=s;}
-		for(int t=sep%n;t!=global_min_seps[(cluster+1)%k];t=(t+1)%n){
-			mapping[cycle[t]]=cluster;
-		}
-	}
-	return mapping;
-	
 }
 
+
+vector<int> pd::greedily_split(){
+    int k=partition_boundaries.size();
+    //if no paritioning (seps) is given, initial split into two partitions
+    if(k<2){
+        partition_boundaries.resize(2);
+        double min=-1;
+        //try all bipartitions
+        for(int i=0;i<n;i++){
+            for(int j=i+1;j<n;j++){
+                //combined score?
+                double s1=pd_value_lookup(i,j);
+                double s2=pd_value_lookup(j,i);
+                //save current optimum
+                  if(min==-1 or (s1+s2)<min){
+                    min=s1+s2;
+                    partition_boundaries[0]=i;
+                    partition_boundaries[1]=j;
+                }
+            }
+        }
+    } else {
+        //else find most diverse partition ...
+        double max=0;
+        int argmax=-1;
+        for(int p=0;p<k;p++){
+            double s = pd_value_lookup(partition_boundaries[p],partition_boundaries[(p+1)%k]);
+            if(s>=max){
+                max=s;
+                argmax=p;
+            }
+        }
+        // ... find optimal split point ...
+        double min=-1;
+        int argmin;
+        int l=partition_boundaries[argmax];
+        int r=partition_boundaries[(argmax+1)%k];
+        for(int i=(l+1)%n;i!=r;i=(i+1)%n){
+            //combined score?
+            double s1=pd_value_lookup(l,i);
+            double s2=pd_value_lookup(i,r);
+            //save current optimum
+            if(min==-1 or (s1+s2) < min){
+                min=s1+s2;
+                argmin=i;
+            }
+        }
+        // ... split ...
+        partition_boundaries.insert(partition_boundaries.begin() + argmax+1, argmin);
+    }
+
+    //compose mapping tax_id->cluster_id
+    //for(int i=0;i<partition_boundaries.size();i++){cout << partition_boundaries[i] << ", ";}cout << endl;
+    return seps2map(partition_boundaries);
+}
+
+
+
+
+
+
+
+vector<int> pd::seps2map(vector<int>& seps){
+    int k=seps.size();
+    //compose mapping tax_id->cluster_id
+    vector<int> mapping(n);
+    for(int cluster=0;cluster<k;cluster++){
+        int sep=seps[cluster];
+        for(int t=sep%n;t!=seps[(cluster+1)%k];t=(t+1)%n){
+            mapping[cycle[t]]=cluster;
+            //double s=pd_value_lookup(sep,seps[(cluster+1)%k]);
+            //pd_list[cluster]=s;
+        }
+    }
+    return mapping;
+}
+
+void pd::partition_statistics(double* pd, vector<double>* pd_list, double* min_pd, double* max_pd, double* min_pd_normalized, double* max_pd_normalized, double* intra_cluster, double* inter_cluster){
+
+    int k=partition_boundaries.size();
+    if(pd_list){pd_list->clear();}
+    //min, max, total
+    if(pd){*pd=0;}
+    if(min_pd or max_pd or pd){
+        if(min_pd){*min_pd=-1;}
+        if(max_pd){*max_pd=0;}
+        for(int cluster=0;cluster<k;cluster++){
+            int sep=partition_boundaries[cluster];
+            double s=pd_value_lookup(sep,partition_boundaries[(cluster+1)%k]);
+            if(pd){*pd+=s;}
+            if(pd_list){pd_list->push_back(s);}
+            if(min_pd and (*min_pd==-1 or s<*min_pd)){*min_pd=s;}
+            if(max_pd and s>*max_pd){*max_pd=s;}
+            //cout << cluster << "\t" << s << endl;
+        }
+    }
+    if(min_pd_normalized){*min_pd_normalized=pd::min_pd_normalized(partition_boundaries);}
+    if(max_pd_normalized){*max_pd_normalized=pd::max_pd_normalized(partition_boundaries);}
+    if(intra_cluster){*intra_cluster=pd::intra_cluster(partition_boundaries);}
+    if(inter_cluster){*inter_cluster=pd::inter_cluster(partition_boundaries);}
+
+}
+
+
+/**
+* Minimum PD value among all subsets normalized by subset size.
+* 
+* @param partition_boundaries the left boundaries of a partitioning
+*/
+double pd::min_pd_normalized(vector<int> partition_boundaries){
+	int k=partition_boundaries.size();
+	double min=-1;
+	//maximize over all clusters
+	for(int cluster=0;cluster<k;cluster++){
+		int curr=partition_boundaries[cluster];
+		int next=partition_boundaries[(cluster+1)%k];
+		//PD value for cluster
+		double s=pd_value_lookup(curr,next);
+		//cluster size
+		int size=(next>curr)?(next-curr):(next+n-curr);
+		//normalize
+		s/=size;
+		if(min==-1 or s<min){min=s;}
+	}
+	return min;
+}
+
+/**
+* Maximum PD value among all subsets normalized by subset size.
+* (Might be interpreted as an intra-cluster distance.)
+*
+* @param partition_boundaries the left boundaries of a partitioning
+*/
+double pd::max_pd_normalized(vector<int> partition_boundaries){
+	int k=partition_boundaries.size();
+	double max=0;
+    //maximize over all clusters
+	for(int cluster=0;cluster<k;cluster++){
+		int curr=partition_boundaries[cluster];
+		int next=partition_boundaries[(cluster+1)%k];
+		//PD value for cluster
+		double s=pd_value_lookup(curr,next);
+		//cluster size
+        int size=(next>curr)?(next-curr):(next+n-curr);
+        //normalize
+        s/=size;
+        if(s>max){
+            max=s;
+        }
+	}
+    return max;
+}
+
+
+/**
+* Maximum pairwise PD value within any subset.
+* 
+* @param partition_boundaries the left boundaries of a partitioning
+*/
+double pd::intra_cluster(vector<int> partition_boundaries){
+	int k=partition_boundaries.size();
+    double max=0;
+    //max over all clusters
+	for(int cluster=0;cluster<k;cluster++){
+		int curr=partition_boundaries[cluster];
+		int next=partition_boundaries[(cluster+1)%k];
+        //avg over all pairs
+        double tot_c=0;
+        int cnt_c=0;
+        for(int i=curr; (i+1)%n!=next; i=(i+1)%n){
+			for(int j=(i+1)%n; j!=next; j=(j+1)%n){
+				//PD value (considered as "distance" here)
+				int l = std::min(i,j);
+				int r = std::max(i,j) ;
+				double s=pd_pair_vals[l][r];
+                tot_c+=s;
+                cnt_c++;
+			}
+		}
+        if(cnt_c>0) {tot_c/=cnt_c;}
+        if(tot_c>max){
+            max+=tot_c;
+        }
+    }
+    return max;
+}
+
+
+
+/**
+* Minimum pairwise PD value between any subsets.
+* 
+* @param partition_boundaries the left boundaries of a partitioning
+*/
+double pd::inter_cluster(vector<int> partition_boundaries){
+	int k=partition_boundaries.size();
+    double min=-1;
+    //minimize over all neighboring clusters
+	for(int cluster=0;cluster<k;cluster++){
+		//PD of gap between clusters
+        int sep=partition_boundaries[cluster];
+        int l = std::min(sep,(sep-1));
+        int r = std::max(sep,(sep-1));
+        if(l<0){l=0;r=n-1;}
+        double s=pd_pair_vals[l][r];
+
+//        // different calculation
+//        double pd_t=pd_value_lookup(partition_boundaries[(cluster+k-1)%k],partition_boundaries[(cluster+1)%k]);
+//        double pd_l=pd_value_lookup(partition_boundaries[(cluster+k-1)%k],partition_boundaries[cluster]);
+//        double pd_r=pd_value_lookup(partition_boundaries[cluster],partition_boundaries[(cluster+1)%k]);
+//        double s_alt=pd_t-pd_l-pd_r;
+
+        if(min==-1 or s<min){
+//      if(min==-1 or s_alt<min){
+            min=s;//_alt;
+        }
+
+	}	
+    return min;
+}
