@@ -1992,7 +1992,7 @@ double min_value = numeric_limits<double>::min(); // current minimal weight repr
 
         //Report outlier
         cout << "Outlier: " << denom_names[my_pd.cycle[iteration]];
-        cout << "New PD score: " << minscore << endl;
+        cout << " New PD score: " << minscore << endl;
 
         //Remove outlier for next iteration (Is this enough???)
 
