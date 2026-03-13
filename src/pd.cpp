@@ -89,17 +89,20 @@ double pd::pd_value(const vector<int>& taxa) {
         color_t colors = it->second;
 		it++;
 				
-		// //separating split? (and non-trivial)
-		// if( !color::is_singleton(colors) && ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
+		//separating split? (and non-trivial)
+		if( !color::is_singleton(colors) && ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
 
-		//separating split?
-		if( ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
+		// //separating split?
+		// if( ((tax_col & colors) != tax_col) && ((tax_col & colors) != 0)){
+
 			val+=weight;
 		}
 
-        // if( color::is_singleton(colors) ){
-        //     val+=std::min(0.5*min,weight);
-        // }
+        if( color::is_singleton(colors) ){
+        	val+=weight;
+        	
+            // val+=std::min(0.5*min,weight);
+        }
 	}
 
 	return val;
