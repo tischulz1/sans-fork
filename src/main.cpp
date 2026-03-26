@@ -2004,6 +2004,8 @@ double min_value = numeric_limits<double>::min(); // current minimal weight repr
              + static_cast<ptrdiff_t>(iteration + 1), my_pd.cycle.end());
         my_pd.cycle = reducedCycle;
         --my_pd.n;
+        //Decrement iteration counter
+        --nb_iterations;
     }
 	
 // time measurement
